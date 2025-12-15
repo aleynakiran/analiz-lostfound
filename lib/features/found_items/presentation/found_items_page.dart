@@ -26,8 +26,7 @@ class _FoundItemsPageState extends ConsumerState<FoundItemsPage> {
     super.dispose();
   }
 
-  List<FoundItem> _getFilteredItems() {
-    final allItems = ref.read(foundItemsProvider);
+  List<FoundItem> _getFilteredItems(List<FoundItem> allItems) {
     var filtered = allItems;
 
     if (_searchQuery.isNotEmpty) {
@@ -49,7 +48,8 @@ class _FoundItemsPageState extends ConsumerState<FoundItemsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final items = _getFilteredItems();
+    final allItems = ref.watch(foundItemsProvider);
+    final items = _getFilteredItems(allItems);
 
     return Scaffold(
       body: CustomScrollView(

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:campus_lost_found/core/data/user_repository.dart';
 import 'package:campus_lost_found/core/data/audit_log_repository.dart';
@@ -6,6 +8,9 @@ import 'package:campus_lost_found/features/claims/data/claims_repository.dart';
 import 'package:campus_lost_found/features/found_items/domain/found_item.dart';
 import 'package:campus_lost_found/features/claims/domain/claim_request.dart';
 import 'package:campus_lost_found/core/domain/app_user.dart';
+import 'package:campus_lost_found/core/domain/item_photo.dart';
+import 'package:campus_lost_found/features/found_items/data/item_photos_repository.dart';
+import 'package:campus_lost_found/features/auth/data/firebase_auth_service.dart';
 
 // Repositories (singletons)
 final userRepositoryProvider = Provider<UserRepository>((ref) {
@@ -24,16 +29,27 @@ final auditLogRepositoryProvider = Provider<AuditLogRepository>((ref) {
   return AuditLogRepository();
 });
 
+final itemPhotosRepositoryProvider = Provider<ItemPhotosRepository>((ref) {
+  return ItemPhotosRepository();
+});
+
+/// Firebase Auth service provider to access auth backend from UI.
+final firebaseAuthServiceProvider = Provider<FirebaseAuthService>((ref) {
+  return FirebaseAuthService();
+});
+
 // State providers for reactivity
 final currentUserProvider = StateNotifierProvider<UserNotifier, AppUser>((ref) {
   return UserNotifier(ref.read(userRepositoryProvider));
 });
 
-final foundItemsStateProvider = StateNotifierProvider<FoundItemsNotifier, List<FoundItem>>((ref) {
+final foundItemsStateProvider =
+    StateNotifierProvider<FoundItemsNotifier, List<FoundItem>>((ref) {
   return FoundItemsNotifier(ref.read(foundItemsRepositoryProvider));
 });
 
-final claimsStateProvider = StateNotifierProvider<ClaimsNotifier, List<ClaimRequest>>((ref) {
+final claimsStateProvider =
+    StateNotifierProvider<ClaimsNotifier, List<ClaimRequest>>((ref) {
   return ClaimsNotifier(ref.read(claimsRepositoryProvider));
 });
 
@@ -47,7 +63,17 @@ final claimsProvider = Provider((ref) {
 });
 
 final pendingClaimsProvider = Provider((ref) {
-  return ref.watch(claimsProvider).where((c) => c.status == ClaimStatus.pending).toList();
+  return ref
+      .watch(claimsProvider)
+      .where((c) => c.status == ClaimStatus.pending)
+      .toList();
+});
+
+/// Stream of photos for a found item, from Firestore subcollection.
+final itemPhotosProvider =
+    StreamProvider.family<List<ItemPhoto>, String>((ref, itemId) {
+  final repo = ref.read(itemPhotosRepositoryProvider);
+  return repo.watchPhotos(itemId);
 });
 
 // Notifiers
@@ -64,16 +90,21 @@ class UserNotifier extends StateNotifier<AppUser> {
 
 class FoundItemsNotifier extends StateNotifier<List<FoundItem>> {
   final FoundItemsRepository _repository;
+  StreamSubscription<List<FoundItem>>? _subscription;
 
-  FoundItemsNotifier(this._repository) : super(_repository.getAllItems()) {
-    _refresh();
+  FoundItemsNotifier(this._repository) : super(const []) {
+    _subscription = _repository.watchAllItems().listen((items) {
+      state = items;
+    });
   }
 
-  void _refresh() {
-    state = _repository.getAllItems();
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
   }
 
-  FoundItem addItem({
+  Future<FoundItem> addItem({
     required String title,
     required String category,
     required String description,
@@ -82,7 +113,7 @@ class FoundItemsNotifier extends StateNotifier<List<FoundItem>> {
     required String createdByOfficerId,
     List<String>? photoPaths,
   }) {
-    final item = _repository.addItem(
+    return _repository.addItem(
       title: title,
       category: category,
       description: description,
@@ -91,18 +122,18 @@ class FoundItemsNotifier extends StateNotifier<List<FoundItem>> {
       createdByOfficerId: createdByOfficerId,
       photoPaths: photoPaths,
     );
-    _refresh();
-    return item;
   }
 
-  void updateItemStatus(String id, ItemStatus status, {DateTime? deliveredAt}) {
-    _repository.updateItemStatus(id, status, deliveredAt: deliveredAt);
-    _refresh();
+  Future<void> updateItemStatus(
+    String id,
+    ItemStatus status, {
+    DateTime? deliveredAt,
+  }) {
+    return _repository.updateItemStatus(id, status, deliveredAt: deliveredAt);
   }
 
-  void reset() {
-    _repository.reset();
-    _refresh();
+  Future<void> reset() async {
+    await _repository.reset();
   }
 }
 
@@ -132,7 +163,8 @@ class ClaimsNotifier extends StateNotifier<List<ClaimRequest>> {
     _refresh();
   }
 
-  void updateClaimStatus(String id, ClaimStatus status, String decidedByOfficerId) {
+  void updateClaimStatus(
+      String id, ClaimStatus status, String decidedByOfficerId) {
     _repository.updateClaimStatus(id, status, decidedByOfficerId);
     _refresh();
   }
@@ -142,4 +174,5 @@ class ClaimsNotifier extends StateNotifier<List<ClaimRequest>> {
     _refresh();
   }
 }
+
 

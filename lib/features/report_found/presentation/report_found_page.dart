@@ -58,7 +58,7 @@ class _ReportFoundPageState extends ConsumerState<ReportFoundPage> {
     }
   }
 
-  void _submitForm() {
+  Future<void> _submitForm() async {
     if (_formKey.currentState!.validate() &&
         _selectedCategory != null &&
         _selectedLocation != null &&
@@ -86,7 +86,7 @@ class _ReportFoundPageState extends ConsumerState<ReportFoundPage> {
       final itemsNotifier = ref.read(foundItemsStateProvider.notifier);
       final auditRepo = ref.read(auditLogRepositoryProvider);
 
-      final item = itemsNotifier.addItem(
+      final item = await itemsNotifier.addItem(
         title: _titleController.text.trim(),
         category: _selectedCategory!,
         description: _descriptionController.text.trim(),

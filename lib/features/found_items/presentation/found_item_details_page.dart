@@ -184,6 +184,9 @@ class FoundItemDetailsPage extends ConsumerWidget {
     final allClaims = ref.watch(claimsProvider);
     final claims = allClaims.where((c) => c.itemId == itemId).toList();
 
+    // Stream of photos from Firestore subcollection
+    final photosAsync = ref.watch(itemPhotosProvider(itemId));
+
     if (item == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Item Details')),
@@ -225,7 +228,14 @@ class FoundItemDetailsPage extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                PhotoCarousel(photos: item.photos, category: item.category),
+                photosAsync.when(
+                  data: (photos) =>
+                      PhotoCarousel(photos: photos, category: item!.category),
+                  loading: () =>
+                      PhotoCarousel(photos: const [], category: item!.category),
+                  error: (_, __) =>
+                      PhotoCarousel(photos: const [], category: item!.category),
+                ),
                 Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(

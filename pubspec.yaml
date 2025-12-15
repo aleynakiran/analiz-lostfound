@@ -26,6 +26,16 @@ dependencies:
   qr_flutter: ^4.1.0
   equatable: ^2.0.5
 
+  # Firebase
+  firebase_core: ^3.15.2
+  firebase_auth: ^5.7.0
+  cloud_firestore: ^5.0.1
+  firebase_storage: ^12.4.10
+
+  # Misc
+  uuid: ^4.5.1
+  image_picker: ^1.0.7
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
