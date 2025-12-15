@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:campus_lost_found/core/domain/app_user.dart';
 import 'package:campus_lost_found/providers/providers.dart';
 import 'package:flutter/foundation.dart';
 
@@ -44,39 +43,6 @@ class SettingsPage extends ConsumerWidget {
                   ),
                 ],
               ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Card(
-            child: Column(
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.person_outline),
-                  title: const Text('Role'),
-                  subtitle: Text(
-                    user.role.name.toUpperCase(),
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  trailing: Switch(
-                    value: user.role == UserRole.officer,
-                    onChanged: (value) {
-                      ref.read(currentUserProvider.notifier).updateRole(
-                        value ? UserRole.officer : UserRole.student,
-                      );
-                    },
-                  ),
-                ),
-                const Divider(),
-                ListTile(
-                  leading: const Icon(Icons.info_outline),
-                  title: const Text('Current Role'),
-                  subtitle: Text(
-                    user.role == UserRole.officer
-                        ? 'You can report found items and review claims'
-                        : 'You can browse items and submit claim requests',
-                  ),
-                ),
-              ],
             ),
           ),
           if (kDebugMode) ...[

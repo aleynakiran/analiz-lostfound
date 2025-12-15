@@ -51,12 +51,37 @@ class PhotoCarousel extends StatelessWidget {
               color: Theme.of(context).colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(16),
             ),
-            child: Center(
-              child: Text(
-                ItemCategories.icons[category] ?? '📦',
-                style: const TextStyle(fontSize: 80),
-              ),
-            ),
+            clipBehavior: Clip.antiAlias,
+            child: photos[index].assetPath.startsWith('http')
+                ? Image.network(
+                    photos[index].assetPath,
+                    fit: BoxFit.cover,
+                    loadingBuilder: (context, child, progress) {
+                      if (progress == null) return child;
+                      return Center(
+                        child: CircularProgressIndicator(
+                          value: progress.expectedTotalBytes != null
+                              ? progress.cumulativeBytesLoaded /
+                                  (progress.expectedTotalBytes ?? 1)
+                              : null,
+                        ),
+                      );
+                    },
+                    errorBuilder: (context, _, __) {
+                      return Center(
+                        child: Text(
+                          ItemCategories.icons[category] ?? '📦',
+                          style: const TextStyle(fontSize: 80),
+                        ),
+                      );
+                    },
+                  )
+                : Center(
+                    child: Text(
+                      ItemCategories.icons[category] ?? '📦',
+                      style: const TextStyle(fontSize: 80),
+                    ),
+                  ),
           );
         },
       ),

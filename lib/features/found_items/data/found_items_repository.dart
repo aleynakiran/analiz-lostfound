@@ -10,7 +10,7 @@ class FoundItemsRepository {
       : _firestore = firestore ?? FirebaseFirestore.instance;
 
   CollectionReference<Map<String, dynamic>> get _collection =>
-      _firestore.collection('foundItems');
+      _firestore.collection('found_items');
 
   /// Real-time stream of all found items ordered by createdAt desc.
   Stream<List<FoundItem>> watchAllItems() {

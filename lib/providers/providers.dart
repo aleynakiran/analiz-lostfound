@@ -10,6 +10,8 @@ import 'package:campus_lost_found/features/claims/domain/claim_request.dart';
 import 'package:campus_lost_found/core/domain/app_user.dart';
 import 'package:campus_lost_found/core/domain/item_photo.dart';
 import 'package:campus_lost_found/features/found_items/data/item_photos_repository.dart';
+import 'package:campus_lost_found/features/chat/data/chat_repository.dart';
+import 'package:campus_lost_found/features/chat/domain/chat_message.dart';
 import 'package:campus_lost_found/features/auth/data/firebase_auth_service.dart';
 
 // Repositories (singletons)
@@ -36,6 +38,10 @@ final itemPhotosRepositoryProvider = Provider<ItemPhotosRepository>((ref) {
 /// Firebase Auth service provider to access auth backend from UI.
 final firebaseAuthServiceProvider = Provider<FirebaseAuthService>((ref) {
   return FirebaseAuthService();
+});
+
+final chatRepositoryProvider = Provider<ChatRepository>((ref) {
+  return ChatRepository();
 });
 
 // State providers for reactivity
@@ -76,11 +82,22 @@ final itemPhotosProvider =
   return repo.watchPhotos(itemId);
 });
 
+final chatMessagesProvider =
+    StreamProvider.family<List<ChatMessage>, String>((ref, itemId) {
+  final repo = ref.read(chatRepositoryProvider);
+  return repo.watchMessages(itemId);
+});
+
 // Notifiers
 class UserNotifier extends StateNotifier<AppUser> {
   final UserRepository _repository;
 
   UserNotifier(this._repository) : super(_repository.getCurrentUser());
+
+  void setUser(AppUser user) {
+    _repository.setCurrentUser(user);
+    state = _repository.getCurrentUser();
+  }
 
   void updateRole(UserRole role) {
     _repository.updateUserRole(role);

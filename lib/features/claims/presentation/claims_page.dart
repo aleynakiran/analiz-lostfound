@@ -10,12 +10,17 @@ import 'package:campus_lost_found/features/found_items/domain/found_item.dart';
 import 'package:campus_lost_found/core/domain/audit_log.dart';
 import 'package:campus_lost_found/providers/providers.dart';
 
-class ClaimsPage extends ConsumerWidget {
+class ClaimsPage extends ConsumerStatefulWidget {
   const ClaimsPage({super.key});
 
+  @override
+  ConsumerState<ClaimsPage> createState() => _ClaimsPageState();
+}
+
+class _ClaimsPageState extends ConsumerState<ClaimsPage> {
+  ClaimStatus _selectedFilter = ClaimStatus.pending;
+
   void _handleClaimDecision(
-    BuildContext context,
-    WidgetRef ref,
     ClaimRequest claim,
     ClaimStatus newStatus,
   ) {
@@ -60,15 +65,21 @@ class ClaimsPage extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final user = ref.read(currentUserProvider);
     final claims = ref.watch(claimsProvider);
     final canReview = user.role == UserRole.officer || user.role == UserRole.admin;
 
-    // Filter claims based on role
-    final displayClaims = canReview
-        ? claims
-        : claims.where((c) => c.requesterName == user.name).toList();
+    // Filter claims based on role and selected status
+    Iterable<ClaimRequest> filtered = claims.where(
+      (c) => c.status == _selectedFilter,
+    );
+
+    if (!canReview) {
+      filtered = filtered.where((c) => c.requesterName == user.name);
+    }
+
+    final displayClaims = filtered.toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -89,49 +100,114 @@ class ClaimsPage extends ConsumerWidget {
             ),
         ],
       ),
-      body: displayClaims.isEmpty
-          ? EmptyState(
+      body: Column(
+        children: [
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _StatusFilterChip(
+                  label: 'Pending',
+                  selected: _selectedFilter == ClaimStatus.pending,
+                  onSelected: () {
+                    setState(() {
+                      _selectedFilter = ClaimStatus.pending;
+                    });
+                  },
+                ),
+                _StatusFilterChip(
+                  label: 'Approved',
+                  selected: _selectedFilter == ClaimStatus.approved,
+                  onSelected: () {
+                    setState(() {
+                      _selectedFilter = ClaimStatus.approved;
+                    });
+                  },
+                ),
+                _StatusFilterChip(
+                  label: 'Rejected',
+                  selected: _selectedFilter == ClaimStatus.rejected,
+                  onSelected: () {
+                    setState(() {
+                      _selectedFilter = ClaimStatus.rejected;
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: displayClaims.isEmpty
+                ? EmptyState(
               icon: '📋',
               title: canReview ? 'No claims to review' : 'No claims submitted',
               subtitle: canReview
                   ? 'Claim requests from students will appear here'
                   : 'You haven\'t submitted any claim requests yet',
             )
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: displayClaims.length,
-              itemBuilder: (context, index) {
-                final claim = displayClaims[index];
-                return ClaimCard(
-                  claim: claim,
-                  onTap: canReview && claim.status == ClaimStatus.pending
-                      ? () {
-                          showDialog(
-                            context: context,
-                            builder: (context) => ClaimDecisionDialog(
-                              claim: claim,
-                              onApprove: () => _handleClaimDecision(
-                                context,
-                                ref,
-                                claim,
-                                ClaimStatus.approved,
-                              ),
-                              onReject: () => _handleClaimDecision(
-                                context,
-                                ref,
-                                claim,
-                                ClaimStatus.rejected,
-                              ),
-                            ),
-                          );
-                        }
-                      : () {
-                          // View item details
-                          context.push('/item/${claim.itemId}');
-                        },
-                );
-              },
-            ),
+                : ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: displayClaims.length,
+                    itemBuilder: (context, index) {
+                      final claim = displayClaims[index];
+                      return ClaimCard(
+                        claim: claim,
+                        onTap: canReview && claim.status == ClaimStatus.pending
+                            ? () {
+                                showDialog(
+                                  context: context,
+                                  builder: (context) => ClaimDecisionDialog(
+                                    claim: claim,
+                                    onApprove: () => _handleClaimDecision(
+                                      claim,
+                                      ClaimStatus.approved,
+                                    ),
+                                    onReject: () => _handleClaimDecision(
+                                      claim,
+                                      ClaimStatus.rejected,
+                                    ),
+                                  ),
+                                );
+                              }
+                            : () {
+                                // View item details
+                                context.push('/item/${claim.itemId}');
+                              },
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusFilterChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onSelected;
+
+  const _StatusFilterChip({
+    required this.label,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => onSelected(),
+      shape: StadiumBorder(
+        side: BorderSide(
+          color: Theme.of(context).colorScheme.outlineVariant,
+        ),
+      ),
     );
   }
 }

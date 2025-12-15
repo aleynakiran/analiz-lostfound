@@ -1,9 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:campus_lost_found/core/utils/validators.dart';
 import 'package:campus_lost_found/core/utils/date_time_x.dart';
-import 'package:campus_lost_found/core/domain/app_user.dart';
 import 'package:campus_lost_found/core/domain/audit_log.dart';
 import 'package:campus_lost_found/features/report_found/presentation/widgets/category_picker.dart';
 import 'package:campus_lost_found/features/report_found/presentation/widgets/location_picker.dart';
@@ -24,6 +26,9 @@ class _ReportFoundPageState extends ConsumerState<ReportFoundPage> {
   String? _selectedLocation;
   DateTime? _foundDate;
   TimeOfDay? _foundTime;
+  final List<XFile> _selectedPhotos = [];
+
+  final _picker = ImagePicker();
 
   @override
   void dispose() {
@@ -58,6 +63,24 @@ class _ReportFoundPageState extends ConsumerState<ReportFoundPage> {
     }
   }
 
+  Future<void> _pickPhoto() async {
+    if (_selectedPhotos.length >= 3) return;
+
+    final picked =
+        await _picker.pickImage(source: ImageSource.gallery, imageQuality: 75);
+    if (picked != null) {
+      setState(() {
+        _selectedPhotos.add(picked);
+      });
+    }
+  }
+
+  void _removePhoto(int index) {
+    setState(() {
+      _selectedPhotos.removeAt(index);
+    });
+  }
+
   Future<void> _submitForm() async {
     if (_formKey.currentState!.validate() &&
         _selectedCategory != null &&
@@ -65,15 +88,6 @@ class _ReportFoundPageState extends ConsumerState<ReportFoundPage> {
         _foundDate != null &&
         _foundTime != null) {
       final user = ref.read(currentUserProvider);
-      
-      if (user.role != UserRole.officer && user.role != UserRole.admin) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Only officers can report found items'),
-          ),
-        );
-        return;
-      }
 
       final foundDateTime = DateTime(
         _foundDate!.year,
@@ -85,6 +99,16 @@ class _ReportFoundPageState extends ConsumerState<ReportFoundPage> {
 
       final itemsNotifier = ref.read(foundItemsStateProvider.notifier);
       final auditRepo = ref.read(auditLogRepositoryProvider);
+      final photosRepo = ref.read(itemPhotosRepositoryProvider);
+
+      if (_selectedPhotos.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please add at least one photo'),
+          ),
+        );
+        return;
+      }
 
       final item = await itemsNotifier.addItem(
         title: _titleController.text.trim(),
@@ -94,6 +118,14 @@ class _ReportFoundPageState extends ConsumerState<ReportFoundPage> {
         foundAt: foundDateTime,
         createdByOfficerId: user.id,
       );
+
+      // Upload photos (min 1, max 3)
+      for (final xfile in _selectedPhotos.take(3)) {
+        await photosRepo.uploadFoundItemPhoto(
+          itemId: item.id,
+          file: File(xfile.path),
+        );
+      }
 
       auditRepo.addLog(
         actorId: user.id,
@@ -127,15 +159,13 @@ class _ReportFoundPageState extends ConsumerState<ReportFoundPage> {
         _selectedLocation = null;
         _foundDate = null;
         _foundTime = null;
+        _selectedPhotos.clear();
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final user = ref.read(currentUserProvider);
-    final canReport = user.role == UserRole.officer || user.role == UserRole.admin;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Report Found Item'),
@@ -147,31 +177,7 @@ class _ReportFoundPageState extends ConsumerState<ReportFoundPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (!canReport)
-                Card(
-                  color: Theme.of(context).colorScheme.errorContainer,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.info_outline,
-                          color: Theme.of(context).colorScheme.onErrorContainer,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Only officers can report found items. Please switch to Officer role in Settings.',
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.onErrorContainer,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              if (!canReport) const SizedBox(height: 16),
+              // Permission notice removed: both students and officers can report found items.
               TextFormField(
                 controller: _titleController,
                 decoration: const InputDecoration(
@@ -197,6 +203,12 @@ class _ReportFoundPageState extends ConsumerState<ReportFoundPage> {
                     _selectedLocation = location;
                   });
                 },
+              ),
+              const SizedBox(height: 16),
+              _PhotoPickerGrid(
+                photos: _selectedPhotos,
+                onAddPhoto: _pickPhoto,
+                onRemovePhoto: _removePhoto,
               ),
               const SizedBox(height: 16),
               Row(
@@ -268,7 +280,7 @@ class _ReportFoundPageState extends ConsumerState<ReportFoundPage> {
               ),
               const SizedBox(height: 32),
               ElevatedButton(
-                onPressed: canReport ? _submitForm : null,
+                onPressed: _submitForm,
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
@@ -278,6 +290,110 @@ class _ReportFoundPageState extends ConsumerState<ReportFoundPage> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _PhotoPickerGrid extends StatelessWidget {
+  final List<XFile> photos;
+  final VoidCallback onAddPhoto;
+  final void Function(int index) onRemovePhoto;
+
+  const _PhotoPickerGrid({
+    required this.photos,
+    required this.onAddPhoto,
+    required this.onRemovePhoto,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final items = <Widget>[
+      for (var i = 0; i < photos.length; i++)
+        Stack(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Image.file(
+                File(photos[i].path),
+                fit: BoxFit.cover,
+                width: double.infinity,
+                height: double.infinity,
+              ),
+            ),
+            Positioned(
+              top: 4,
+              right: 4,
+              child: CircleAvatar(
+                radius: 14,
+                backgroundColor: theme.colorScheme.surface.withOpacity(0.9),
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  icon: const Icon(Icons.close, size: 16),
+                  onPressed: () => onRemovePhoto(i),
+                ),
+              ),
+            ),
+          ],
+        ),
+      if (photos.length < 3)
+        InkWell(
+          onTap: onAddPhoto,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: theme.colorScheme.outlineVariant,
+              ),
+            ),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.add_a_photo_outlined,
+                    color: theme.colorScheme.primary,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Add photo',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Min 1, max 3',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Photos',
+          style: theme.textTheme.titleMedium,
+        ),
+        const SizedBox(height: 8),
+        GridView.count(
+          crossAxisCount: 3,
+          mainAxisSpacing: 8,
+          crossAxisSpacing: 8,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          childAspectRatio: 1,
+          children: items,
+        ),
+      ],
     );
   }
 }

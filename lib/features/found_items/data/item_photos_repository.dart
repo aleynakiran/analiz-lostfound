@@ -17,10 +17,10 @@ class ItemPhotosRepository {
         _storage = storage ?? FirebaseStorage.instance;
 
   /// Real-time stream of photos for an item from subcollection:
-  /// foundItems/{itemId}/photos
+  /// found_items/{itemId}/photos
   Stream<List<ItemPhoto>> watchPhotos(String itemId) {
     final collection = _firestore
-        .collection('foundItems')
+        .collection('found_items')
         .doc(itemId)
         .collection('photos')
         .orderBy('createdAt', descending: false);
@@ -52,7 +52,7 @@ class ItemPhotosRepository {
 
   /// Upload a photo to Storage and create a Firestore doc under photos subcollection.
   ///
-  /// Storage path: foundItems/{itemId}/photos/{photoId}.jpg
+  /// Storage path: found_items/{itemId}/found/{photoId}.jpg
   ///
   /// TODO(UI): Call this from your "Add Photo" button after picking an image file.
   Future<ItemPhoto> uploadFoundItemPhoto({
@@ -63,25 +63,25 @@ class ItemPhotosRepository {
 
     final storageRef = _storage
         .ref()
-        .child('foundItems/$itemId/photos/$photoId.jpg');
+        .child('found_items/$itemId/found/$photoId.jpg');
 
     await storageRef.putFile(file);
     final url = await storageRef.getDownloadURL();
 
     final docRef = _firestore
-        .collection('foundItems')
+        .collection('found_items')
         .doc(itemId)
         .collection('photos')
         .doc(photoId);
 
     await docRef.set({
       'url': url,
-      'type': 'FOUND',
+      'type': 'found',
       'createdAt': FieldValue.serverTimestamp(),
     });
 
     // Update coverPhotoUrl on parent item.
-    await _firestore.collection('foundItems').doc(itemId).update({
+    await _firestore.collection('found_items').doc(itemId).update({
       'coverPhotoUrl': url,
     });
 

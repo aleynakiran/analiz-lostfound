@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 import 'package:campus_lost_found/core/widgets/status_badge.dart';
 import 'package:campus_lost_found/core/utils/date_time_x.dart';
 import 'package:campus_lost_found/core/constants/categories.dart';
@@ -84,7 +83,6 @@ class FoundItemDetailsPage extends ConsumerWidget {
                     if (formKey.currentState!.validate()) {
                       final user = ref.read(currentUserProvider);
                       final claimsNotifier = ref.read(claimsStateProvider.notifier);
-                      final itemsNotifier = ref.read(foundItemsStateProvider.notifier);
                       final auditRepo = ref.read(auditLogRepositoryProvider);
 
                       claimsNotifier.addClaim(
@@ -95,8 +93,6 @@ class FoundItemDetailsPage extends ConsumerWidget {
                             : studentNoController.text,
                         notes: notesController.text,
                       );
-
-                      itemsNotifier.updateItemStatus(item.id, ItemStatus.pendingClaim);
 
                       auditRepo.addLog(
                         actorId: user.id,
@@ -198,9 +194,17 @@ class FoundItemDetailsPage extends ConsumerWidget {
         user.role == UserRole.student;
     final canApprove = user.role == UserRole.officer || user.role == UserRole.admin;
     final hasPendingClaims = claims.any((c) => c.status == ClaimStatus.pending);
+    final hasApprovedClaims =
+        claims.any((c) => c.status == ClaimStatus.approved);
     final canMarkDelivered = item.status == ItemStatus.pendingClaim &&
         canApprove &&
         claims.any((c) => c.status == ClaimStatus.approved);
+    final canOpenChat = hasApprovedClaims &&
+        (user.role == UserRole.officer ||
+            user.role == UserRole.admin ||
+            claims
+                .where((c) => c.status == ClaimStatus.approved)
+                .any((c) => c.requesterName == user.name));
 
     return Scaffold(
       body: CustomScrollView(
@@ -286,29 +290,6 @@ class FoundItemDetailsPage extends ConsumerWidget {
                         item.description,
                         style: Theme.of(context).textTheme.bodyLarge,
                       ),
-                      const SizedBox(height: 24),
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'QR Code',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              const SizedBox(height: 16),
-                              Center(
-                                child: QrImageView(
-                                  data: item.qrValue,
-                                  version: QrVersions.auto,
-                                  size: 200,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
                       if (hasPendingClaims) ...[
                         const SizedBox(height: 24),
                         Card(
@@ -343,6 +324,16 @@ class FoundItemDetailsPage extends ConsumerWidget {
                             onPressed: () => _showClaimBottomSheet(context, ref, item!),
                             icon: const Icon(Icons.flag_outlined),
                             label: const Text('Claim This Item'),
+                          ),
+                        ),
+                      if (canOpenChat)
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () =>
+                                context.push('/item/${item!.id}/chat'),
+                            icon: const Icon(Icons.chat_bubble_outline),
+                            label: const Text('Chat'),
                           ),
                         ),
                       if (canMarkDelivered)
