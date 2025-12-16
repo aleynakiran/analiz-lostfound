@@ -101,6 +101,13 @@ final userChatsProvider =
   return repo.userChatsStream(uid);
 });
 
+/// User-specific found items (for "My Found Items" page).
+final myFoundItemsProvider =
+    StreamProvider.family<List<FoundItem>, String>((ref, uid) {
+  final repo = ref.read(foundItemsRepositoryProvider);
+  return repo.watchItemsByUser(uid);
+});
+
 // Notifiers
 
 class FoundItemsNotifier extends StateNotifier<List<FoundItem>> {

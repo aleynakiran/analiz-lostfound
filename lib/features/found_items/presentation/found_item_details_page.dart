@@ -221,18 +221,25 @@ class FoundItemDetailsPage extends ConsumerWidget {
       );
     }
 
-    final canClaim = item.status == ItemStatus.inStorage &&
+    final isOwner = item.createdByOfficerId == user.uid;
+
+    final canClaim = !isOwner &&
+        item.status == ItemStatus.inStorage &&
         user.role == UserRole.student;
-    final canApprove = user.role == UserRole.officer || user.role == UserRole.admin;
+
+    final canApprove =
+        user.role == UserRole.officer || user.role == UserRole.admin;
+
     final hasPendingClaims =
         claims.any((c) => c.status == ClaimStatus.pending);
+
     final canMarkDelivered = item.status == ItemStatus.pendingClaim &&
         canApprove &&
         claims.any((c) => c.status == ClaimStatus.approved);
 
-    // Allow messaging for any signed-in user on the detail page.
+    // Only non-owners can start chat.
     final canMessage =
-        item.status != ItemStatus.delivered;
+        !isOwner && item.status != ItemStatus.delivered;
 
     return Scaffold(
       body: CustomScrollView(
@@ -349,7 +356,8 @@ class FoundItemDetailsPage extends ConsumerWidget {
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton.icon(
-                            onPressed: () => _showClaimBottomSheet(context, ref, item!),
+                            onPressed: () =>
+                                _showClaimBottomSheet(context, ref, item!),
                             icon: const Icon(Icons.flag_outlined),
                             label: const Text('Claim This Item'),
                           ),
@@ -364,6 +372,85 @@ class FoundItemDetailsPage extends ConsumerWidget {
                             label: const Text('Chat'),
                           ),
                         ),
+                      if (isOwner) ...[
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () =>
+                                context.push('/item/${item!.id}/edit'),
+                            icon: const Icon(Icons.edit),
+                            label: const Text('Edit Item'),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () async {
+                              final confirmed = await showDialog<bool>(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  title: const Text('Delete Item'),
+                                  content: const Text(
+                                    'This will delete the item and all associated photos. '
+                                    'This action cannot be undone. Are you sure?',
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(context, false),
+                                      child: const Text('Cancel'),
+                                    ),
+                                    ElevatedButton(
+                                      onPressed: () =>
+                                          Navigator.pop(context, true),
+                                      child: const Text('Delete'),
+                                    ),
+                                  ],
+                                ),
+                              );
+
+                              if (confirmed != true) return;
+
+                              final photosRepo =
+                                  ref.read(itemPhotosRepositoryProvider);
+                              final itemsRepo =
+                                  ref.read(foundItemsRepositoryProvider);
+
+                              try {
+                                await photosRepo
+                                    .deleteAllPhotosForItem(item!.id);
+                                await itemsRepo.deleteItem(item!.id);
+
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                        content: Text(
+                                            'Item and photos deleted')),
+                                  );
+                                  Navigator.pop(context);
+                                }
+                              } catch (e) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                        content: Text('Delete failed: $e')),
+                                  );
+                                }
+                              }
+                            },
+                            icon: const Icon(
+                              Icons.delete,
+                              color: Colors.red,
+                            ),
+                            label: const Text(
+                              'Delete Item',
+                              style: TextStyle(color: Colors.red),
+                            ),
+                          ),
+                        ),
+                      ],
                       if (canMarkDelivered)
                         SizedBox(
                           width: double.infinity,

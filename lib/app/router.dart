@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:campus_lost_found/features/home/presentation/home_page.dart';
 import 'package:campus_lost_found/features/found_items/presentation/found_item_details_page.dart';
+import 'package:campus_lost_found/features/found_items/presentation/my_found_items_page.dart';
+import 'package:campus_lost_found/features/found_items/presentation/edit_found_item_page.dart';
 import 'package:campus_lost_found/features/auth_demo/presentation/settings_page.dart';
 import 'package:campus_lost_found/features/auth/presentation/login_page.dart';
 import 'package:campus_lost_found/features/auth/presentation/register_page.dart';
@@ -63,8 +65,19 @@ final router = GoRouter(
       },
     ),
     GoRoute(
+      path: '/item/:id/edit',
+      builder: (context, state) {
+        final itemId = state.pathParameters['id']!;
+        return EditFoundItemPage(itemId: itemId);
+      },
+    ),
+    GoRoute(
       path: '/settings',
       builder: (context, state) => const SettingsPage(),
+    ),
+    GoRoute(
+      path: '/my-items',
+      builder: (context, state) => const MyFoundItemsPage(),
     ),
   ],
 );

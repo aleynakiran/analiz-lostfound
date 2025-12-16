@@ -242,4 +242,45 @@ class ItemPhotosRepository {
       rethrow;
     }
   }
+
+  /// Delete all photos (Firestore docs + Storage objects) for a given item.
+  Future<void> deleteAllPhotosForItem(String itemId) async {
+    try {
+      final photosSnap = await _firestore
+          .collection('found_items')
+          .doc(itemId)
+          .collection('photos')
+          .get();
+
+      for (final doc in photosSnap.docs) {
+        final photoId = doc.id;
+
+        // Storage path follows the same pattern as upload
+        final ref = _storage
+            .ref()
+            .child('found_items/$itemId/found/$photoId.jpg');
+
+        try {
+          await ref.delete();
+          debugPrint(
+              '[ItemPhotosRepository] Deleted storage object ${ref.fullPath}');
+        } catch (e) {
+          debugPrint(
+              '[ItemPhotosRepository] Warning: Failed to delete storage object ${ref.fullPath}: $e');
+        }
+
+        try {
+          await doc.reference.delete();
+        } catch (e) {
+          debugPrint(
+              '[ItemPhotosRepository] Warning: Failed to delete photo doc ${doc.reference.path}: $e');
+        }
+      }
+    } catch (e, st) {
+      debugPrint(
+          '[ItemPhotosRepository] Error while deleting all photos for item $itemId: $e');
+      debugPrint('[ItemPhotosRepository] Stacktrace: $st');
+      rethrow;
+    }
+  }
 }

@@ -12,59 +12,8 @@ class FoundItemsRepository {
   CollectionReference<Map<String, dynamic>> get _collection =>
       _firestore.collection('found_items');
 
-  /// Real-time stream of all found items ordered by createdAt desc.
-  Stream<List<FoundItem>> watchAllItems() {
-    return _collection
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) {
-        final data = doc.data();
-
-        final statusString =
-            (data['status'] as String? ?? 'IN_STORAGE').toUpperCase();
-        final ItemStatus status;
-        switch (statusString) {
-          case 'PENDING_CLAIM':
-            status = ItemStatus.pendingClaim;
-            break;
-          case 'DELIVERED':
-            status = ItemStatus.delivered;
-            break;
-          default:
-            status = ItemStatus.inStorage;
-        }
-
-        final foundAt =
-            (data['foundAt'] as Timestamp?)?.toDate() ?? DateTime.now();
-        final deliveredAt =
-            (data['deliveredAt'] as Timestamp?)?.toDate();
-
-        return FoundItem(
-          id: doc.id,
-          title: data['title'] as String? ?? '',
-          category: data['category'] as String? ?? 'Other',
-          description: data['description'] as String? ?? '',
-          foundLocation: data['location'] as String? ?? '',
-          foundAt: foundAt,
-          status: status,
-          // Photos are loaded via subcollection repository
-          photos: const [],
-          qrValue: data['qrValue'] as String? ??
-              IdGenerator.generateQrValue(doc.id),
-          createdByOfficerId: data['createdByOfficerId'] as String? ?? '',
-          deliveredAt: deliveredAt,
-          mainPhotoUrl: data['coverPhotoUrl'] as String?,
-        );
-      }).toList();
-    });
-  }
-
-  /// One-time fetch of a single item.
-  Future<FoundItem?> getItemById(String id) async {
-    final doc = await _collection.doc(id).get();
-    if (!doc.exists) return null;
-    final data = doc.data()!;
+  FoundItem _fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data() ?? <String, dynamic>{};
 
     final statusString =
         (data['status'] as String? ?? 'IN_STORAGE').toUpperCase();
@@ -93,13 +42,38 @@ class FoundItemsRepository {
       foundLocation: data['location'] as String? ?? '',
       foundAt: foundAt,
       status: status,
+      // Photos are loaded via subcollection repository
       photos: const [],
-      qrValue:
-          data['qrValue'] as String? ?? IdGenerator.generateQrValue(doc.id),
+      qrValue: data['qrValue'] as String? ??
+          IdGenerator.generateQrValue(doc.id),
       createdByOfficerId: data['createdByOfficerId'] as String? ?? '',
       deliveredAt: deliveredAt,
       mainPhotoUrl: data['coverPhotoUrl'] as String?,
     );
+  }
+
+  /// Real-time stream of all found items ordered by createdAt desc.
+  Stream<List<FoundItem>> watchAllItems() {
+    return _collection
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map(_fromDoc).toList());
+  }
+
+  /// Real-time stream of items created by a specific user.
+  Stream<List<FoundItem>> watchItemsByUser(String uid) {
+    return _collection
+        .where('createdByOfficerId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map(_fromDoc).toList());
+  }
+
+  /// One-time fetch of a single item.
+  Future<FoundItem?> getItemById(String id) async {
+    final doc = await _collection.doc(id).get();
+    if (!doc.exists) return null;
+    return _fromDoc(doc);
   }
 
   /// Create a new found item document.
@@ -172,6 +146,26 @@ class FoundItemsRepository {
     }
 
     await _collection.doc(id).update(update);
+  }
+
+  /// Update editable fields of an item.
+  Future<void> updateItemDetails(
+    String id, {
+    required String title,
+    required String description,
+    required String foundLocation,
+  }) async {
+    await _collection.doc(id).update({
+      'title': title,
+      'description': description,
+      'location': foundLocation,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Delete an item document.
+  Future<void> deleteItem(String id) async {
+    await _collection.doc(id).delete();
   }
 
   /// Utility to clear all found items (for demo reset).
